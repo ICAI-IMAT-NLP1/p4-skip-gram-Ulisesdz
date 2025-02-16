@@ -32,8 +32,8 @@ class SkipGramNeg(nn.Module):
 
         # Define embedding layers for input and output words
         # TODO
-        self.in_embed: nn.Embedding = None
-        self.out_embed: nn.Embedding = None
+        self.in_embed: nn.Embedding = nn.Embedding(n_vocab, n_embed)
+        self.out_embed: nn.Embedding = nn.Embedding(n_vocab, n_embed)
 
         # Initialize embedding tables with uniform distribution
         self.in_embed.weight.data.uniform_(-1, 1)
@@ -49,7 +49,7 @@ class SkipGramNeg(nn.Module):
             A tensor containing the input vectors for the given words.
         """
         # TODO
-        input_vectors: torch.Tensor = None
+        input_vectors: torch.Tensor = self.in_embed(input_words)
         return input_vectors
 
     def forward_output(self, output_words: torch.Tensor) -> torch.Tensor:
@@ -62,7 +62,7 @@ class SkipGramNeg(nn.Module):
             A tensor containing the output vectors for the given words.
         """
         # TODO
-        output_vectors: torch.Tensor = None
+        output_vectors: torch.Tensor = self.out_embed(output_words)
         return output_vectors
 
     def forward_noise(self, batch_size: int, n_samples: int) -> torch.Tensor:
@@ -83,14 +83,15 @@ class SkipGramNeg(nn.Module):
 
         # Sample words from our noise distribution
         # TODO
-        noise_words: torch.Tensor = None
+        # Para cada palabra del batch muestreo n_samples y siguiendo la distribución del ruido
+        noise_words: torch.Tensor = torch.multinomial(noise_dist, batch_size * n_samples, replacement=True)
 
         device: str = "cuda" if self.out_embed.weight.is_cuda else "cpu"
         noise_words: torch.Tensor = noise_words.to(device)
 
         # Reshape output vectors to size (batch_size, n_samples, n_embed)
         # TODO
-        noise_vectors: torch.Tensor = None
+        noise_vectors: torch.Tensor = self.out_embed(noise_words).view(batch_size, n_samples, self.n_embed)
 
         return noise_vectors
 
@@ -127,12 +128,22 @@ class NegativeSamplingLoss(nn.Module):
 
         # Compute log-sigmoid loss for correct classifications
         # TODO
-        out_loss = None
+        # Se suma sobre embed_size para reducir la dimensionalidad y obtener un solo número que represente la relación entre cada par de palabras
+        out_loss = torch.log(
+            torch.nn.functional.sigmoid(
+                torch.sum(input_vectors*output_vectors, # Tensor de la forma (batch_size, embed_size)
+                          dim=1) # Sumo sobre la dimensión de las características (embed_size) -> (batch_size,)
+                ))
 
         # Compute log-sigmoid loss for incorrect classifications
         # TODO
-        noise_loss = None
+        noise_loss = torch.log(
+            torch.nn.functional.sigmoid(
+                -torch.sum(input_vectors.unsqueeze(1) # Amplio 1 dimension para que cuadre con noise_vector y hacer bradcasting
+                           * noise_vectors, # Tensor de la forma (batch_size, n_samples, embed_size)
+                           dim=2) # Sumo sobre la dimensión de las características (embed_size) -> (batch_size, n_samples)
+                ))
 
         # Return the negative sum of the correct and noisy log-sigmoid losses, averaged over the batch
         # TODO
-        return None
+        return - (out_loss.sum() + noise_loss.sum()) / input_vectors.shape[0]

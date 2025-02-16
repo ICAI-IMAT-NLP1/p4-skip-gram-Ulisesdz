@@ -9,7 +9,7 @@ except:
     from src.data_processing import load_and_preprocess_data, create_lookup_tables, subsample_words, get_batches, cosine_similarity
     from src.skipgram import SkipGramNeg
     from src.train import train_skipgram
-    from utils import plot_embeddings, save_model
+    from src.utils import plot_embeddings, save_model
 
 def main():
     print("Starting the SkipGram training pipeline...")
@@ -27,7 +27,7 @@ def main():
     runs_folder = "runs"  # Folder to save models
     model_filename = "skipgram_model.pth"  # Filename to save the model
     model_path = os.path.join(runs_folder, model_filename)  # Full path to the model
-    train_model = True
+    train_model = False
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     print("Step 1: Loading and preprocessing data...")
@@ -47,7 +47,7 @@ def main():
         print("Calculating noise distribution for negative sampling...")
         word_freqs = torch.tensor(sorted(freqs.values(), reverse=True))
         unigram_dist = word_freqs / word_freqs.sum()
-        noise_dist = torch.tensor(unigram_dist ** 0.75 / torch.sum(unigram_dist ** 0.75)).to(device)
+        noise_dist = (unigram_dist ** 0.75 / torch.sum(unigram_dist ** 0.75)).clone().detach().to(device)
 
         print("Step 4: Initializing the SkipGram model...")
         model = SkipGramNeg(len(vocab_to_int), embedding_dim, noise_dist=noise_dist).to(device)
